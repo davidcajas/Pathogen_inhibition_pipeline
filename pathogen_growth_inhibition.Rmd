@@ -11,7 +11,7 @@ always_allow_html: true
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, fig.width = 9.6, fig.height = 5.4, dpi = 200)
 ```
 
 ## 0) Data import
@@ -57,11 +57,9 @@ if (length(need_install) > 0) {
 # saveRDS(required_packages, "required_packages.rds")
 ```
 
-### 0.2) Create dataframe
+### 0.2) Import measurements data
 
-#### 0.2.1) Import measurements data
-
-Import all pages inside the "pathogen_growth_inhibition.xlsx" excel file.
+Import the first page inside the "pathogen_growth_inhibition.xlsx" excel file.
 
 ```{r}
 library(readxl)
@@ -85,48 +83,16 @@ results$Agrobacterium_colonies_5dpi_B_relative_growth <- as.factor(results$Agrob
 (results)
 ```
 
-#### 0.2.2) Data processing
-
-Some calculations will be done:
-
-Fungal growth rate: $Growth~rate~(mm/day) = \frac{colony~radius~(mm)}{time~(days)}$
-
-Inhibition rate (based on [Kamaruzzaman et al. 2021](https://www.sciencedirect.com/science/article/pii/S1878535221003051)): $Inhibition~rate~(\%) = \frac{Growth~rate~(mm/day)_{Control} - Growth~rate~(mm/day)_{Sample}}{Growth~rate~(mm/day)_{Control}} \times 100$
-
-Area-based inhibition rate: $Inhibition~rate~(\%) = \frac{\pi \times Area_{Control} - \pi \times Area_{Sample}}{\pi \times Area_{Control}} \times 100$
-
-$$
-= \frac{\pi \times (Growth~rate~(mm/day)_{Control})^2 - \pi \times (Growth~rate~(mm/day)_{Sample})^2}{\pi \times (Growth~rate~(mm/day)_{Control})^2} \times 100
-$$
-
-$$
-= \frac{(Growth~rate~(mm/day)_{Control} - Growth~rate~(mm/day)_{Sample})^2}{(Growth~rate~(mm/day)_{Control})^2} \times 100
-$$
-
-```{r}
-# Calculate growth rates
-results$Fusarium_growth_rate_A_sterile_mmday <- (results$Fusarium_growth_6dpi_A_sterile_mm/6)
-
-results$Fusarium_growth_rate_B_mmday <- (results$Fusarium_growth_14dpi_B_mm/14)
-
-# Calculate inhibition growth rates
-
-results$Fusarium_inhibition_rate <- (100*(results$Fusarium_growth_rate_A_sterile_mmday - results$Fusarium_growth_rate_B_mmday) /  results$Fusarium_growth_rate_A_sterile_mmday)
-
-results$Fusarium_inhibition_area <- (100*(results$Fusarium_growth_rate_A_sterile_mmday - results$Fusarium_growth_rate_B_mmday)^2 /  results$Fusarium_growth_rate_A_sterile_mmday^2)
-
-```
-
 ### 0.3) Import samples metadata
 
-#### 0.3.1) Import metadata from samples processed in Microresp
+#### 0.3.1) Import metadata from samples 
 
 ```{r}
 library(readxl)
 library(stringr)
 library(tidyr)
 
-#Import sample labels from Microresp spreadsheet
+# Import sample labels from Metadata page in "pathogen_growth_inhibition.xlsx" spreadsheet
 meta <- read_excel(sourcefile, sheet = "Metadata") # import columns
 meta$Sample <- as.factor(meta$Sample) # Make sure the Sample column is of type character
 meta$replicate <- as.factor(meta$replicate)
@@ -172,7 +138,7 @@ soil_data[numeric_cols] <- lapply(soil_data[numeric_cols], function(x) {
 rm(numeric_cols) # Remove auxiliary object
 ```
 
-#### 0.3.3) Extract relevant experiment metadata and add to Microresp metadata dataframes
+#### 0.3.3) Extract relevant experiment metadata and merge it into our metadata spreadsheet
 
 ```{r}
 library(dplyr)
@@ -216,17 +182,34 @@ library(dplyr)
 
 results <- left_join(results,meta,by = "Sample")
 results
-colnames(results)
-```
-
-Simplified view of the dataset
-
-```{r}
-interest_columns <- c("Sample", "soil", "treatment", "Fusarium_growth_14dpi_B_mm", "Fusarium_inhibition_rate", "Fusarium_inhibition_area")
-select(results, interest_columns)
 ```
 
 ## 1) Data processing
+
+Some calculations will be done to further process the data:
+
+-   Fungal growth rate: $Growth~rate~(mm/day) = \frac{colony~radius~(mm)}{time~(days)}$
+
+-   Inhibition rate (based on [Kamaruzzaman et al. 2021](https://www.sciencedirect.com/science/article/pii/S1878535221003051)): $Inhibition~rate~(\%) = \frac{Growth~rate~(mm/day)_{Control} - Growth~rate~(mm/day)_{Sample}}{Growth~rate~(mm/day)_{Control}} \times 100$
+
+```{r}
+# Calculate growth rates
+results$Fusarium_growth_rate_A_sterile_mmday <- (results$Fusarium_growth_6dpi_A_sterile_mm/6)
+
+results$Fusarium_growth_rate_B_mmday <- (results$Fusarium_growth_14dpi_B_mm/14) # taking the 14 dpi data as a measurement point
+
+# Calculate inhibition growth rates
+
+results$Fusarium_inhibition_rate <- (100*(results$Fusarium_growth_rate_A_sterile_mmday - results$Fusarium_growth_rate_B_mmday) /  results$Fusarium_growth_rate_A_sterile_mmday)
+
+```
+
+Let's check a simplified view of the dataset
+
+```{r}
+interest_columns <- c("Sample", "soil", "treatment", "Fusarium_growth_14dpi_B_mm", "Fusarium_inhibition_rate")
+select(results, interest_columns)
+```
 
 ## 2) Data visualization
 
@@ -245,6 +228,8 @@ palette_products <- palette_5col
 names(palette_products) <- levels(treatment_data$applied_product)
 ```
 
+Plot both the raw measurements along with the inhibition rate indicator
+
 ```{r}
 library(ggplot2)
 library(ggpubr)
@@ -257,7 +242,8 @@ plot_fusarium_growth <- ggplot(drop_na(results,"Fusarium_growth_14dpi_B_mm")
   geom_boxplot() +
   scale_color_manual(values = palette_treatments) +
   theme_prism() + 
-  labs(x = "Soil", y = "Growth (mm)") 
+  labs(x = "Soil", y = "Growth (mm)") +
+  ggtitle("F. oxysporum colony radius in non-autoclaved plates")
 
 plot_fusarium_inhibition <- ggplot(drop_na(results,"Fusarium_inhibition_rate")
        , aes(x = soil, y = Fusarium_inhibition_rate, color = treatment)) +
@@ -273,29 +259,16 @@ plot_fusarium_inhibition <- ggplot(drop_na(results,"Fusarium_inhibition_rate")
            vjust = 0,   # Align the top of the text with the y-coordinate
            size = 3) +
   coord_cartesian(clip = "off") + # Allows text to go outside the standard plot area
-  labs(x = "Soil", y = "Rhizosphere inhibitory effect (%)") + ggtitle("F. oxysporum growth inhibition by rhizosphere samples, 6 days after inoculation")
+  labs(x = "Soil", y = "Rhizosphere inhibitory effect (%)") + ggtitle("F. oxysporum growth inhibition by soil samples")
 
-plot_fusarium_inhibition_2 <- ggplot(drop_na(results,"Fusarium_inhibition_area")
-       , aes(x = soil, y = Fusarium_inhibition_area, color = treatment)) +
-  geom_point() +
-  geom_boxplot() +
-  scale_color_manual(values = palette_treatments) +
-    annotate("text",
-           x = 1.5, # Midpoint of the x-axis, adjust if you have more soil types
-           y = 90, # Place it slightly above the max data point. Adjust this value.
-           label = expression(paste("Inhibition rate (%) = ", 100 * frac((Growth~rate~(mm/day)[Control] - Growth~rate~(mm/day)[Sample])^2, (Growth~rate~(mm/day)[Control])^2))),
-           hjust = 0, # Center horizontally
-           vjust = 0,   # Align the top of the text with the y-coordinate
-           size = 3) +
-  coord_cartesian(clip = "off") + # Allows text to go outside the standard plot area
-  theme_prism() + 
-  labs(x = "Soil", y = "Rhizosphere inhibitory area (%)") 
-
-ggarrange(plot_fusarium_growth,plot_fusarium_inhibition, nrow = 1)
-ggplotly(plot_fusarium_growth)
+ggarrange(plot_fusarium_growth,plot_fusarium_inhibition, nrow = 1, common.legend = T)
+plot_fusarium_growth
+plot_fusarium_inhibition
 ```
 
-## 4) Statistics
+## 3) Statistics
+
+### 3.1) Fit a model to the data
 
 Finding de model that best describes the data:
 
@@ -325,32 +298,31 @@ model_fixed <- lm(Fusarium_inhibition_rate ~ soil/replicate + soil + treatment +
 
 ### The mixed models with no nesting of the replicate effect were more successful on fitting the data, therefore explain better the dataset and will be used in further analyses.
 
-summary(model_random_a)
+# summary(model_random_a)
 summary(model_random_b)
 
-anova(model_random_a)
+# anova(model_random_a)
 anova.lme(model_random_b)
 
 ```
 
-The model suggest there is a soil effect and a treatment effect for some soils. The ANOVA did not find the treatment effect nor the soil:treatment interaction to be significant. Nonetheless, the treatment effect was non-significant by a not-so-big margin. The comparison will be carried then in a within soil basis.
+The mixed linear model suggests there is are inconsistent soil effects and treatment effects. The ANOVA does not find significant soil or treatment effect but it does show a significant soil:treatment interaction. The comparison will be carried then in an interaction cohort basis, ie: treatment difference within soils.
+
+### 3.2) Run multiple comparisons test
 
 ```{r}
 library(emmeans)
 # library(multcomp)
 library(dplyr)
 
-# aov(Fusarium_inhibition_rate ~ treatment, filter(drop_na(results,"Fusarium_growth_rate_B_mmday"), soil == "Clay"))
-
 # Get estimated marginal means for the 'group' factor
 (paircomp <- emmeans(model_random_a, pairwise ~ treatment|soil, adjust = "tukey"))
+```
 
-# categories <- cld(paircomp, 
-#     alpha = 0.05, 
-#     Letters = LETTERS, # Use capital letters for groups
-#     adjust = "Tukey")
-# 
-# as.data.frame(categories)
+According to the multiple comparisons analysis, the only soil where the treatment produces a significant change is in the Clay soil. The additional sample measurement for the Sandy high Phosphate soil might change the result for this comparison.
 
-# plot_fusarium_inhibition + geom_signif(paircomp)
+### 3.3) Add statistics to the original plot
+
+```{r}
+
 ```

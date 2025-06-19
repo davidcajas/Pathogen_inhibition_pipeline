@@ -6,11 +6,16 @@ David Rodrigo Cajas
 - [0) Data import](#0-data-import)
   - [0.1) Working directory and
     packages](#01-working-directory-and-packages)
-  - [0.2) Create dataframe](#02-create-dataframe)
+  - [0.2) Import measurements data](#02-import-measurements-data)
   - [0.3) Import samples metadata](#03-import-samples-metadata)
 - [1) Data processing](#1-data-processing)
 - [2) Data visualization](#2-data-visualization)
-- [4) Statistics](#4-statistics)
+- [3) Statistics](#3-statistics)
+  - [3.1) Fit a model to the data](#31-fit-a-model-to-the-data)
+  - [3.2) Run multiple comparisons
+    test](#32-run-multiple-comparisons-test)
+  - [3.3) Add statistics to the original
+    plot](#33-add-statistics-to-the-original-plot)
 
 ## 0) Data import
 
@@ -56,11 +61,9 @@ of script’s required packages
 # saveRDS(required_packages, "required_packages.rds")
 ```
 
-### 0.2) Create dataframe
+### 0.2) Import measurements data
 
-#### 0.2.1) Import measurements data
-
-Import all pages inside the “pathogen_growth_inhibition.xlsx” excel
+Import the first page inside the “pathogen_growth_inhibition.xlsx” excel
 file.
 
 ``` r
@@ -133,51 +136,16 @@ results$Agrobacterium_colonies_5dpi_B_relative_growth <- as.factor(results$Agrob
     ## #   `Agrobacterium_colonies_5dpi_A_sterile_#` <dbl>,
     ## #   Agrobacterium_dilution_A_sterile <dbl>, …
 
-#### 0.2.2) Data processing
-
-Some calculations will be done:
-
-Fungal growth rate:
-$Growth~rate~(mm/day) = \frac{colony~radius~(mm)}{time~(days)}$
-
-Inhibition rate (based on [Kamaruzzaman et
-al. 2021](https://www.sciencedirect.com/science/article/pii/S1878535221003051)):
-$Inhibition~rate~(\%) = \frac{Growth~rate~(mm/day)_{Control} - Growth~rate~(mm/day)_{Sample}}{Growth~rate~(mm/day)_{Control}} \times 100$
-
-Area-based inhibition rate:
-$Inhibition~rate~(\%) = \frac{\pi \times Area_{Control} - \pi \times Area_{Sample}}{\pi \times Area_{Control}} \times 100$
-
-$$
-= \frac{\pi \times (Growth~rate~(mm/day)_{Control})^2 - \pi \times (Growth~rate~(mm/day)_{Sample})^2}{\pi \times (Growth~rate~(mm/day)_{Control})^2} \times 100
-$$
-
-$$
-= \frac{(Growth~rate~(mm/day)_{Control} - Growth~rate~(mm/day)_{Sample})^2}{(Growth~rate~(mm/day)_{Control})^2} \times 100
-$$
-
-``` r
-# Calculate growth rates
-results$Fusarium_growth_rate_A_sterile_mmday <- (results$Fusarium_growth_6dpi_A_sterile_mm/6)
-
-results$Fusarium_growth_rate_B_mmday <- (results$Fusarium_growth_14dpi_B_mm/14)
-
-# Calculate inhibition growth rates
-
-results$Fusarium_inhibition_rate <- (100*(results$Fusarium_growth_rate_A_sterile_mmday - results$Fusarium_growth_rate_B_mmday) /  results$Fusarium_growth_rate_A_sterile_mmday)
-
-results$Fusarium_inhibition_area <- (100*(results$Fusarium_growth_rate_A_sterile_mmday - results$Fusarium_growth_rate_B_mmday)^2 /  results$Fusarium_growth_rate_A_sterile_mmday^2)
-```
-
 ### 0.3) Import samples metadata
 
-#### 0.3.1) Import metadata from samples processed in Microresp
+#### 0.3.1) Import metadata from samples
 
 ``` r
 library(readxl)
 library(stringr)
 library(tidyr)
 
-#Import sample labels from Microresp spreadsheet
+# Import sample labels from Metadata page in "pathogen_growth_inhibition.xlsx" spreadsheet
 meta <- read_excel(sourcefile, sheet = "Metadata") # import columns
 meta$Sample <- as.factor(meta$Sample) # Make sure the Sample column is of type character
 meta$replicate <- as.factor(meta$replicate)
@@ -240,7 +208,7 @@ soil_data[numeric_cols] <- lapply(soil_data[numeric_cols], function(x) {
 rm(numeric_cols) # Remove auxiliary object
 ```
 
-#### 0.3.3) Extract relevant experiment metadata and add to Microresp metadata dataframes
+#### 0.3.3) Extract relevant experiment metadata and merge it into our metadata spreadsheet
 
 ``` r
 library(dplyr)
@@ -307,7 +275,7 @@ results <- left_join(results,meta,by = "Sample")
 results
 ```
 
-    ## # A tibble: 44 × 44
+    ## # A tibble: 44 × 40
     ##    Week  Inoculation_date    Sample              Fusarium_growth_6dpi_A_steril…¹
     ##    <fct> <dttm>              <fct>                                         <dbl>
     ##  1 1     2025-05-22 00:00:00 Postitive_control_1                            28.7
@@ -322,65 +290,38 @@ results
     ## 10 2     2025-05-28 00:00:00 12                                             27  
     ## # ℹ 34 more rows
     ## # ℹ abbreviated name: ¹​Fusarium_growth_6dpi_A_sterile_mm
-    ## # ℹ 40 more variables: Fusarium_growth_6dpi_B_mm <dbl>,
+    ## # ℹ 36 more variables: Fusarium_growth_6dpi_B_mm <dbl>,
     ## #   Fusarium_growth_11dpi_A_sterile_mm <dbl>, Fusarium_growth_11dpi_B_mm <dbl>,
     ## #   Fusarium_growth_14dpi_B_mm <dbl>,
     ## #   `Agrobacterium_colonies_5dpi_A_sterile_#` <dbl>,
     ## #   Agrobacterium_dilution_A_sterile <dbl>, …
 
+## 1) Data processing
+
+Some calculations will be done to further process the data:
+
+- Fungal growth rate:
+  $Growth~rate~(mm/day) = \frac{colony~radius~(mm)}{time~(days)}$
+
+- Inhibition rate (based on [Kamaruzzaman et
+  al. 2021](https://www.sciencedirect.com/science/article/pii/S1878535221003051)):
+  $Inhibition~rate~(\%) = \frac{Growth~rate~(mm/day)_{Control} - Growth~rate~(mm/day)_{Sample}}{Growth~rate~(mm/day)_{Control}} \times 100$
+
 ``` r
-colnames(results)
+# Calculate growth rates
+results$Fusarium_growth_rate_A_sterile_mmday <- (results$Fusarium_growth_6dpi_A_sterile_mm/6)
+
+results$Fusarium_growth_rate_B_mmday <- (results$Fusarium_growth_14dpi_B_mm/14) # taking the 14 dpi data as a measurement point
+
+# Calculate inhibition growth rates
+
+results$Fusarium_inhibition_rate <- (100*(results$Fusarium_growth_rate_A_sterile_mmday - results$Fusarium_growth_rate_B_mmday) /  results$Fusarium_growth_rate_A_sterile_mmday)
 ```
 
-    ##  [1] "Week"                                          
-    ##  [2] "Inoculation_date"                              
-    ##  [3] "Sample"                                        
-    ##  [4] "Fusarium_growth_6dpi_A_sterile_mm"             
-    ##  [5] "Fusarium_growth_6dpi_B_mm"                     
-    ##  [6] "Fusarium_growth_11dpi_A_sterile_mm"            
-    ##  [7] "Fusarium_growth_11dpi_B_mm"                    
-    ##  [8] "Fusarium_growth_14dpi_B_mm"                    
-    ##  [9] "Agrobacterium_colonies_5dpi_A_sterile_#"       
-    ## [10] "Agrobacterium_dilution_A_sterile"              
-    ## [11] "Agrobacterium_population_5dpi_A_sterile_CFU-mL"
-    ## [12] "Agrobacterium_colonies_5dpi_B_#"               
-    ## [13] "Agrobacterium_dilution_B"                      
-    ## [14] "Agrobacterium_population_5dpi_B_CFU-mL"        
-    ## [15] "Agrobacterium_colonies_5dpi_B_relative_growth" 
-    ## [16] "Agrobacterium_lowest_dilution_with_growth_B"   
-    ## [17] "Fusarium_growth_rate_A_sterile_mmday"          
-    ## [18] "Fusarium_growth_rate_B_mmday"                  
-    ## [19] "Fusarium_inhibition_rate"                      
-    ## [20] "Fusarium_inhibition_area"                      
-    ## [21] "plant"                                         
-    ## [22] "soil"                                          
-    ## [23] "treatment"                                     
-    ## [24] "replicate"                                     
-    ## [25] "moisture"                                      
-    ## [26] "weight_for_0.5"                                
-    ## [27] "origin_location"                               
-    ## [28] "soil_texture"                                  
-    ## [29] "CaCO3_perc"                                    
-    ## [30] "NOM_perc"                                      
-    ## [31] "pH"                                            
-    ## [32] "P-CaCl2_mgP/kg"                                
-    ## [33] "P-AL_mgP/kg"                                   
-    ## [34] "applied_product"                               
-    ## [35] "target_function"                               
-    ## [36] "active_principle_1"                            
-    ## [37] "active_principle_2"                            
-    ## [38] "active_principle_3"                            
-    ## [39] "active_principle_4"                            
-    ## [40] "active_principle_5"                            
-    ## [41] "active_principle_6"                            
-    ## [42] "active_principle_7"                            
-    ## [43] "active_principle_8"                            
-    ## [44] "active_principle_9"
-
-Simplified view of the dataset
+Let’s check a simplified view of the dataset
 
 ``` r
-interest_columns <- c("Sample", "soil", "treatment", "Fusarium_growth_14dpi_B_mm", "Fusarium_inhibition_rate", "Fusarium_inhibition_area")
+interest_columns <- c("Sample", "soil", "treatment", "Fusarium_growth_14dpi_B_mm", "Fusarium_inhibition_rate")
 select(results, interest_columns)
 ```
 
@@ -397,7 +338,7 @@ select(results, interest_columns)
     ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
     ## generated.
 
-    ## # A tibble: 44 × 6
+    ## # A tibble: 44 × 5
     ##    Sample          soil  treatment Fusarium_growth_14dp…¹ Fusarium_inhibition_…²
     ##    <fct>           <chr> <fct>                      <dbl>                  <dbl>
     ##  1 Postitive_cont… <NA>  <NA>                        NA                     NA  
@@ -412,9 +353,6 @@ select(results, interest_columns)
     ## 10 12              Sand… Disease …                   11.8                   81.3
     ## # ℹ 34 more rows
     ## # ℹ abbreviated names: ¹​Fusarium_growth_14dpi_B_mm, ²​Fusarium_inhibition_rate
-    ## # ℹ 1 more variable: Fusarium_inhibition_area <dbl>
-
-## 1) Data processing
 
 ## 2) Data visualization
 
@@ -432,6 +370,8 @@ names(palette_treatments) <- levels(treatment_data$label)
 palette_products <- palette_5col
 names(palette_products) <- levels(treatment_data$applied_product)
 ```
+
+Plot both the raw measurements along with the inhibition rate indicator
 
 ``` r
 library(ggplot2)
@@ -462,7 +402,8 @@ plot_fusarium_growth <- ggplot(drop_na(results,"Fusarium_growth_14dpi_B_mm")
   geom_boxplot() +
   scale_color_manual(values = palette_treatments) +
   theme_prism() + 
-  labs(x = "Soil", y = "Growth (mm)") 
+  labs(x = "Soil", y = "Growth (mm)") +
+  ggtitle("F. oxysporum colony radius in non-autoclaved plates")
 
 plot_fusarium_inhibition <- ggplot(drop_na(results,"Fusarium_inhibition_rate")
        , aes(x = soil, y = Fusarium_inhibition_rate, color = treatment)) +
@@ -478,25 +419,9 @@ plot_fusarium_inhibition <- ggplot(drop_na(results,"Fusarium_inhibition_rate")
            vjust = 0,   # Align the top of the text with the y-coordinate
            size = 3) +
   coord_cartesian(clip = "off") + # Allows text to go outside the standard plot area
-  labs(x = "Soil", y = "Rhizosphere inhibitory effect (%)") + ggtitle("F. oxysporum growth inhibition by rhizosphere samples, 6 days after inoculation")
+  labs(x = "Soil", y = "Rhizosphere inhibitory effect (%)") + ggtitle("F. oxysporum growth inhibition by soil samples")
 
-plot_fusarium_inhibition_2 <- ggplot(drop_na(results,"Fusarium_inhibition_area")
-       , aes(x = soil, y = Fusarium_inhibition_area, color = treatment)) +
-  geom_point() +
-  geom_boxplot() +
-  scale_color_manual(values = palette_treatments) +
-    annotate("text",
-           x = 1.5, # Midpoint of the x-axis, adjust if you have more soil types
-           y = 90, # Place it slightly above the max data point. Adjust this value.
-           label = expression(paste("Inhibition rate (%) = ", 100 * frac((Growth~rate~(mm/day)[Control] - Growth~rate~(mm/day)[Sample])^2, (Growth~rate~(mm/day)[Control])^2))),
-           hjust = 0, # Center horizontally
-           vjust = 0,   # Align the top of the text with the y-coordinate
-           size = 3) +
-  coord_cartesian(clip = "off") + # Allows text to go outside the standard plot area
-  theme_prism() + 
-  labs(x = "Soil", y = "Rhizosphere inhibitory area (%)") 
-
-ggarrange(plot_fusarium_growth,plot_fusarium_inhibition, nrow = 1)
+ggarrange(plot_fusarium_growth,plot_fusarium_inhibition, nrow = 1, common.legend = T)
 ```
 
     ## Warning in is.na(x): is.na() applied to non-(list or vector) of type
@@ -505,15 +430,23 @@ ggarrange(plot_fusarium_growth,plot_fusarium_inhibition, nrow = 1)
 ![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
 
 ``` r
-ggplotly(plot_fusarium_growth)
+plot_fusarium_growth
 ```
 
-    ## PhantomJS not found. You can install it with webshot::install_phantomjs(). If it is installed, please make sure the phantomjs executable can be found via the PATH variable.
+![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-13-2.png)<!-- -->
 
-<div class="plotly html-widget html-fill-item" id="htmlwidget-c9f42221745e637c5e7d" style="width:672px;height:480px;"></div>
-<script type="application/json" data-for="htmlwidget-c9f42221745e637c5e7d">{"x":{"data":[{"x":[1,2,2,3,4,1,1,1,1,2,2,3,3,3,4,4,4],"y":[10.75,14.75,13.75,11.75,23.857142857142858,9.25,11.5,9.5,9.25,11.75,11.5,10.5,10.75,10.75,15.75,9.25,7.25],"text":["soil: Clay<br />Fusarium_growth_6dpi_B_mm: 10.750000<br />treatment: Control","soil: Sandy high Phos<br />Fusarium_growth_6dpi_B_mm: 14.750000<br />treatment: Control","soil: Sandy high Phos<br />Fusarium_growth_6dpi_B_mm: 13.750000<br />treatment: Control","soil: Sandy low Phos<br />Fusarium_growth_6dpi_B_mm: 11.750000<br />treatment: Control","soil: Sandy not managed<br />Fusarium_growth_6dpi_B_mm: 23.857143<br />treatment: Control","soil: Clay<br />Fusarium_growth_6dpi_B_mm:  9.250000<br />treatment: Control","soil: Clay<br />Fusarium_growth_6dpi_B_mm: 11.500000<br />treatment: Control","soil: Clay<br />Fusarium_growth_6dpi_B_mm:  9.500000<br />treatment: Control","soil: Clay<br />Fusarium_growth_6dpi_B_mm:  9.250000<br />treatment: Control","soil: Sandy high Phos<br />Fusarium_growth_6dpi_B_mm: 11.750000<br />treatment: Control","soil: Sandy high Phos<br />Fusarium_growth_6dpi_B_mm: 11.500000<br />treatment: Control","soil: Sandy low Phos<br />Fusarium_growth_6dpi_B_mm: 10.500000<br />treatment: Control","soil: Sandy low Phos<br />Fusarium_growth_6dpi_B_mm: 10.750000<br />treatment: Control","soil: Sandy low Phos<br />Fusarium_growth_6dpi_B_mm: 10.750000<br />treatment: Control","soil: Sandy not managed<br />Fusarium_growth_6dpi_B_mm: 15.750000<br />treatment: Control","soil: Sandy not managed<br />Fusarium_growth_6dpi_B_mm:  9.250000<br />treatment: Control","soil: Sandy not managed<br />Fusarium_growth_6dpi_B_mm:  7.250000<br />treatment: Control"],"type":"scatter","mode":"markers","marker":{"autocolorscale":false,"color":"rgba(235,137,0,1)","opacity":1,"size":5.6692913385826778,"symbol":"circle","line":{"width":1.8897637795275593,"color":"rgba(235,137,0,1)"}},"hoveron":"points","name":"Control","legendgroup":"Control","showlegend":true,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null},{"x":[1,1,1,1,1,2,2,3,3,4,2,2,2,3,3,3,4,4],"y":[10,9.6666666666666661,9,0,0,19,11,13.199999999999999,10,12.75,12.5,13.75,11.5,9.25,11.75,8.5,9.75,11],"text":["soil: Clay<br />Fusarium_growth_6dpi_B_mm: 10.000000<br />treatment: Disease suppression","soil: Clay<br />Fusarium_growth_6dpi_B_mm:  9.666667<br />treatment: Disease suppression","soil: Clay<br />Fusarium_growth_6dpi_B_mm:  9.000000<br />treatment: Disease suppression","soil: Clay<br />Fusarium_growth_6dpi_B_mm:  0.000000<br />treatment: Disease suppression","soil: Clay<br />Fusarium_growth_6dpi_B_mm:  0.000000<br />treatment: Disease suppression","soil: Sandy high Phos<br />Fusarium_growth_6dpi_B_mm: 19.000000<br />treatment: Disease suppression","soil: Sandy high Phos<br />Fusarium_growth_6dpi_B_mm: 11.000000<br />treatment: Disease suppression","soil: Sandy low Phos<br />Fusarium_growth_6dpi_B_mm: 13.200000<br />treatment: Disease suppression","soil: Sandy low Phos<br />Fusarium_growth_6dpi_B_mm: 10.000000<br />treatment: Disease suppression","soil: Sandy not managed<br />Fusarium_growth_6dpi_B_mm: 12.750000<br />treatment: Disease suppression","soil: Sandy high Phos<br />Fusarium_growth_6dpi_B_mm: 12.500000<br />treatment: Disease suppression","soil: Sandy high Phos<br />Fusarium_growth_6dpi_B_mm: 13.750000<br />treatment: Disease suppression","soil: Sandy high Phos<br />Fusarium_growth_6dpi_B_mm: 11.500000<br />treatment: Disease suppression","soil: Sandy low Phos<br />Fusarium_growth_6dpi_B_mm:  9.250000<br />treatment: Disease suppression","soil: Sandy low Phos<br />Fusarium_growth_6dpi_B_mm: 11.750000<br />treatment: Disease suppression","soil: Sandy low Phos<br />Fusarium_growth_6dpi_B_mm:  8.500000<br />treatment: Disease suppression","soil: Sandy not managed<br />Fusarium_growth_6dpi_B_mm:  9.750000<br />treatment: Disease suppression","soil: Sandy not managed<br />Fusarium_growth_6dpi_B_mm: 11.000000<br />treatment: Disease suppression"],"type":"scatter","mode":"markers","marker":{"autocolorscale":false,"color":"rgba(71,215,172,1)","opacity":1,"size":5.6692913385826778,"symbol":"circle","line":{"width":1.8897637795275593,"color":"rgba(71,215,172,1)"}},"hoveron":"points","name":"Disease suppression","legendgroup":"Disease suppression","showlegend":true,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null},{"x":[1,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4],"y":[10.75,9.25,9.25,11.5,9.5,11.75,14.75,13.75,11.5,11.75,10.75,10.5,10.75,23.857142857142858,15.75,9.25,7.25],"hoverinfo":"y","type":"box","fillcolor":"rgba(255,255,255,1)","marker":{"opacity":null,"outliercolor":"rgba(0,0,0,1)","line":{"width":1.8897637795275593,"color":"rgba(0,0,0,1)"},"size":5.6692913385826778},"line":{"color":"rgba(235,137,0,1)","width":1.8897637795275593},"name":"Control","legendgroup":"Control","showlegend":false,"xaxis":"x","yaxis":"y","frame":null},{"x":[1,1,1,1,1,2,2,2,2,2,3,3,3,3,3,4,4,4],"y":[10,9.6666666666666661,9,0,0,19,11,13.75,11.5,12.5,13.199999999999999,9.25,11.75,8.5,10,9.75,12.75,11],"hoverinfo":"y","type":"box","fillcolor":"rgba(255,255,255,1)","marker":{"opacity":null,"outliercolor":"rgba(0,0,0,1)","line":{"width":1.8897637795275593,"color":"rgba(0,0,0,1)"},"size":5.6692913385826778},"line":{"color":"rgba(71,215,172,1)","width":1.8897637795275593},"name":"Disease suppression","legendgroup":"Disease suppression","showlegend":false,"xaxis":"x","yaxis":"y","frame":null}],"layout":{"margin":{"t":29.017849730178501,"r":9.2984640929846432,"b":56.720630967206304,"l":53.001245330012466},"plot_bgcolor":"transparent","paper_bgcolor":"rgba(255,255,255,1)","font":{"color":"rgba(0,0,0,1)","family":"sans","size":18.596928185969279},"xaxis":{"domain":[0,1],"automargin":true,"type":"linear","autorange":false,"range":[0.40000000000000002,4.5999999999999996],"tickmode":"array","ticktext":["Clay","Sandy high Phos","Sandy low Phos","Sandy not managed"],"tickvals":[1,2,3,4],"categoryorder":"array","categoryarray":["Clay","Sandy high Phos","Sandy low Phos","Sandy not managed"],"nticks":null,"ticks":"outside","tickcolor":"rgba(0,0,0,1)","ticklen":7.4387712743877135,"tickwidth":1.32835201328352,"showticklabels":true,"tickfont":{"color":"rgba(0,0,0,1)","family":"sans","size":17.667081776670816},"tickangle":-0,"showline":true,"linecolor":"rgba(0,0,0,1)","linewidth":1.32835201328352,"showgrid":false,"gridcolor":null,"gridwidth":0,"zeroline":false,"anchor":"y","title":{"text":"<b> Soil <\/b>","font":{"color":"rgba(0,0,0,1)","family":"sans","size":18.596928185969279}},"hoverformat":".2f"},"yaxis":{"domain":[0,1],"automargin":true,"type":"linear","autorange":false,"range":[-1.1928571428571428,25.050000000000001],"tickmode":"array","ticktext":["0","5","10","15","20","25"],"tickvals":[0,5,10,15,20,25],"categoryorder":"array","categoryarray":["0","5","10","15","20","25"],"nticks":null,"ticks":"outside","tickcolor":"rgba(0,0,0,1)","ticklen":7.4387712743877135,"tickwidth":1.32835201328352,"showticklabels":true,"tickfont":{"color":"rgba(0,0,0,1)","family":"sans","size":17.667081776670816},"tickangle":-0,"showline":true,"linecolor":"rgba(0,0,0,1)","linewidth":1.32835201328352,"showgrid":false,"gridcolor":null,"gridwidth":0,"zeroline":false,"anchor":"x","title":{"text":"<b> Growth (mm) <\/b>","font":{"color":"rgba(0,0,0,1)","family":"sans","size":18.596928185969279}},"hoverformat":".2f"},"shapes":[{"type":"rect","fillcolor":null,"line":{"color":null,"width":0,"linetype":[]},"yref":"paper","xref":"paper","x0":0,"x1":1,"y0":0,"y1":1}],"showlegend":true,"legend":{"bgcolor":null,"bordercolor":null,"borderwidth":0,"font":{"color":"rgba(0,0,0,1)","family":"sans","size":14.877542548775427},"title":{"text":"treatment","font":{"color":null,"family":null,"size":0}}},"hovermode":"closest","barmode":"relative"},"config":{"doubleClick":"reset","modeBarButtonsToAdd":["hoverclosest","hovercompare"],"showSendToCloud":false},"source":"A","attrs":{"5e4115eb9788":{"x":{},"y":{},"colour":{},"type":"scatter"},"5e411e296cf6":{"x":{},"y":{},"colour":{}}},"cur_data":"5e4115eb9788","visdat":{"5e4115eb9788":["function (y) ","x"],"5e411e296cf6":["function (y) ","x"]},"highlight":{"on":"plotly_click","persistent":false,"dynamic":false,"selectize":false,"opacityDim":0.20000000000000001,"selected":{"opacity":1},"debounce":0},"shinyEvents":["plotly_hover","plotly_click","plotly_selected","plotly_relayout","plotly_brushed","plotly_brushing","plotly_clickannotation","plotly_doubleclick","plotly_deselect","plotly_afterplot","plotly_sunburstclick"],"base_url":"https://plot.ly"},"evals":[],"jsHooks":[]}</script>
+``` r
+plot_fusarium_inhibition
+```
 
-## 4) Statistics
+    ## Warning in is.na(x): is.na() applied to non-(list or vector) of type
+    ## 'expression'
+
+![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-13-3.png)<!-- -->
+
+## 3) Statistics
+
+### 3.1) Fit a model to the data
 
 Finding de model that best describes the data:
 
@@ -583,60 +516,7 @@ model_fixed <- lm(Fusarium_inhibition_rate ~ soil/replicate + soil + treatment +
 
 ### The mixed models with no nesting of the replicate effect were more successful on fitting the data, therefore explain better the dataset and will be used in further analyses.
 
-summary(model_random_a)
-```
-
-    ## Linear mixed model fit by REML. t-tests use Satterthwaite's method [
-    ## lmerModLmerTest]
-    ## Formula: Fusarium_inhibition_rate ~ soil + treatment + soil:treatment +  
-    ##     (1 | replicate)
-    ##    Data: drop_na(results, "Fusarium_growth_rate_B_mmday")
-    ## 
-    ## REML criterion at convergence: 170.8
-    ## 
-    ## Scaled residuals: 
-    ##      Min       1Q   Median       3Q      Max 
-    ## -2.49142 -0.50916 -0.01755  0.51315  2.64135 
-    ## 
-    ## Random effects:
-    ##  Groups    Name        Variance Std.Dev.
-    ##  replicate (Intercept)  0.7317  0.8554  
-    ##  Residual              20.5239  4.5303  
-    ## Number of obs: 35, groups:  replicate, 5
-    ## 
-    ## Fixed effects:
-    ##                                                    Estimate Std. Error      df
-    ## (Intercept)                                         80.5716     2.0618 26.8409
-    ## soilSandy high Phos                                 -5.9265     3.0442 24.1958
-    ## soilSandy low Phos                                   0.2731     3.0439 24.1411
-    ## soilSandy not managed                               -5.0608     3.0442 24.1958
-    ## treatmentDisease suppression                        -9.2887     2.8652 23.6216
-    ## soilSandy high Phos:treatmentDisease suppression    13.4363     4.1805 23.9301
-    ## soilSandy low Phos:treatmentDisease suppression      8.6861     4.1803 23.9003
-    ## soilSandy not managed:treatmentDisease suppression  12.6094     4.4979 24.0158
-    ##                                                    t value Pr(>|t|)    
-    ## (Intercept)                                         39.078  < 2e-16 ***
-    ## soilSandy high Phos                                 -1.947  0.06325 .  
-    ## soilSandy low Phos                                   0.090  0.92925    
-    ## soilSandy not managed                               -1.662  0.10932    
-    ## treatmentDisease suppression                        -3.242  0.00352 ** 
-    ## soilSandy high Phos:treatmentDisease suppression     3.214  0.00372 ** 
-    ## soilSandy low Phos:treatmentDisease suppression      2.078  0.04863 *  
-    ## soilSandy not managed:treatmentDisease suppression   2.803  0.00985 ** 
-    ## ---
-    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-    ## 
-    ## Correlation of Fixed Effects:
-    ##             (Intr) slSnhP slSnlP slSnnm trtmDs sShP:s sSlP:s
-    ## slSndyhghPh -0.654                                          
-    ## slSndylwPhs -0.654  0.442                                   
-    ## slSndyntmng -0.654  0.446  0.442                            
-    ## trtmntDsssp -0.695  0.471  0.471  0.471                     
-    ## slShPhs:tDs  0.476 -0.728 -0.322 -0.325 -0.685              
-    ## slSlPhs:tDs  0.476 -0.322 -0.728 -0.322 -0.685  0.469       
-    ## slSnmngd:Ds  0.443 -0.300 -0.301 -0.675 -0.637  0.437  0.437
-
-``` r
+# summary(model_random_a)
 summary(model_random_b)
 ```
 
@@ -695,18 +575,7 @@ summary(model_random_b)
     ## Number of Groups: 5
 
 ``` r
-anova(model_random_a)
-```
-
-    ## Type III Analysis of Variance Table with Satterthwaite's method
-    ##                 Sum Sq Mean Sq NumDF  DenDF F value  Pr(>F)  
-    ## soil           112.696  37.565     3 24.451  1.8303 0.16807  
-    ## treatment        3.108   3.108     1 24.122  0.1514 0.70059  
-    ## soil:treatment 262.535  87.512     3 24.064  4.2639 0.01503 *
-    ## ---
-    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-``` r
+# anova(model_random_a)
 anova.lme(model_random_b)
 ```
 
@@ -716,11 +585,13 @@ anova.lme(model_random_b)
     ## treatment          1    23    0.531  0.4736
     ## soil:treatment     3    23    4.264  0.0156
 
-The model suggest there is a soil effect and a treatment effect for some
-soils. The ANOVA did not find the treatment effect nor the
-soil:treatment interaction to be significant. Nonetheless, the treatment
-effect was non-significant by a not-so-big margin. The comparison will
-be carried then in a within soil basis.
+The mixed linear model suggests there is are inconsistent soil effects
+and treatment effects. The ANOVA does not find significant soil or
+treatment effect but it does show a significant soil:treatment
+interaction. The comparison will be carried then in an interaction
+cohort basis, ie: treatment difference within soils.
+
+### 3.2) Run multiple comparisons test
 
 ``` r
 library(emmeans)
@@ -733,8 +604,6 @@ library(emmeans)
 ``` r
 # library(multcomp)
 library(dplyr)
-
-# aov(Fusarium_inhibition_rate ~ treatment, filter(drop_na(results,"Fusarium_growth_rate_B_mmday"), soil == "Clay"))
 
 # Get estimated marginal means for the 'group' factor
 (paircomp <- emmeans(model_random_a, pairwise ~ treatment|soil, adjust = "tukey"))
@@ -783,13 +652,9 @@ library(dplyr)
     ## 
     ## Degrees-of-freedom method: kenward-roger
 
-``` r
-# categories <- cld(paircomp, 
-#     alpha = 0.05, 
-#     Letters = LETTERS, # Use capital letters for groups
-#     adjust = "Tukey")
-# 
-# as.data.frame(categories)
+According to the multiple comparisons analysis, the only soil where the
+treatment produces a significant change is in the Clay soil. The
+additional sample measurement for the Sandy high Phosphate soil might
+change the result for this comparison.
 
-# plot_fusarium_inhibition + geom_signif(paircomp)
-```
+### 3.3) Add statistics to the original plot
