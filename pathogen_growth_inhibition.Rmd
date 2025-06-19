@@ -1,0 +1,356 @@
+---
+title: "Microresp pipeline"
+author: "David Rodrigo Cajas"
+date: "`r Sys.Date()`"
+output: 
+  github_document:
+    toc: true
+  html_document:
+    toc: true
+always_allow_html: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 0) Data import
+
+### 0.1) Working directory and packages
+
+First we need to install the Rstudioapi package
+
+```{r}
+# (Install and) load Rstudio api package
+if ("rstudioapi" %in% installed.packages()) {
+  library(rstudioapi)
+} else {
+  install.packages("rstudioapi")
+  library(rstudioapi)
+} 
+```
+
+Now we will set the working directory to where the R markdown folder is
+
+```{r}
+wd <- dirname(rstudioapi::getSourceEditorContext()$path)
+
+setwd(wd)
+```
+
+Import the list of packages in "required_packages.rds" and install them
+
+```{r}
+# Load list of required packages
+required_packages <- readRDS("required_packages.rds")
+# Install script's required packages
+need_install <- required_packages[!(required_packages) %in% installed.packages()]
+if (length(need_install) > 0) {
+  install.packages(need_install)
+}
+```
+
+[Later on] If you modified this code, don't forget to update the list of script's required packages
+
+```{r}
+# required_packages <- names(sessionInfo()$otherPkgs)
+# saveRDS(required_packages, "required_packages.rds")
+```
+
+### 0.2) Create dataframe
+
+#### 0.2.1) Import measurements data
+
+Import all pages inside the "pathogen_growth_inhibition.xlsx" excel file.
+
+```{r}
+library(readxl)
+library(dplyr)
+library(stringr)
+library(gtools)
+library(tidyverse)
+
+# set the file containing the data
+sourcefile <- "pathogen_growth_inhibition.xlsx"
+
+results <- read_excel(sourcefile, sheet = 1) # import columns
+results <- drop_na(results,"Sample") # Remove rows where the Sample value is NA
+
+# Set the right type for every column
+results$Week <- as.factor(results$Week)
+results$Sample <- as.factor(results$Sample)
+results$Agrobacterium_colonies_5dpi_B_relative_growth <- as.factor(results$Agrobacterium_colonies_5dpi_B_relative_growth)
+
+# See the dataframe
+(results)
+```
+
+#### 0.2.2) Data processing
+
+Some calculations will be done:
+
+Fungal growth rate: $Growth~rate~(mm/day) = \frac{colony~radius~(mm)}{time~(days)}$
+
+Inhibition rate (based on [Kamaruzzaman et al. 2021](https://www.sciencedirect.com/science/article/pii/S1878535221003051)): $Inhibition~rate~(\%) = \frac{Growth~rate~(mm/day)_{Control} - Growth~rate~(mm/day)_{Sample}}{Growth~rate~(mm/day)_{Control}} \times 100$
+
+Area-based inhibition rate: $Inhibition~rate~(\%) = \frac{\pi \times Area_{Control} - \pi \times Area_{Sample}}{\pi \times Area_{Control}} \times 100$
+
+$$
+= \frac{\pi \times (Growth~rate~(mm/day)_{Control})^2 - \pi \times (Growth~rate~(mm/day)_{Sample})^2}{\pi \times (Growth~rate~(mm/day)_{Control})^2} \times 100
+$$
+
+$$
+= \frac{(Growth~rate~(mm/day)_{Control} - Growth~rate~(mm/day)_{Sample})^2}{(Growth~rate~(mm/day)_{Control})^2} \times 100
+$$
+
+```{r}
+# Calculate growth rates
+results$Fusarium_growth_rate_A_sterile_mmday <- (results$Fusarium_growth_6dpi_A_sterile_mm/6)
+
+results$Fusarium_growth_rate_B_mmday <- (results$Fusarium_growth_14dpi_B_mm/14)
+
+# Calculate inhibition growth rates
+
+results$Fusarium_inhibition_rate <- (100*(results$Fusarium_growth_rate_A_sterile_mmday - results$Fusarium_growth_rate_B_mmday) /  results$Fusarium_growth_rate_A_sterile_mmday)
+
+results$Fusarium_inhibition_area <- (100*(results$Fusarium_growth_rate_A_sterile_mmday - results$Fusarium_growth_rate_B_mmday)^2 /  results$Fusarium_growth_rate_A_sterile_mmday^2)
+
+```
+
+### 0.3) Import samples metadata
+
+#### 0.3.1) Import metadata from samples processed in Microresp
+
+```{r}
+library(readxl)
+library(stringr)
+library(tidyr)
+
+#Import sample labels from Microresp spreadsheet
+meta <- read_excel(sourcefile, sheet = "Metadata") # import columns
+meta$Sample <- as.factor(meta$Sample) # Make sure the Sample column is of type character
+meta$replicate <- as.factor(meta$replicate)
+
+meta
+
+```
+
+#### 0.3.2) Import experiment metadata
+
+Note that this script imports the metadata from "experiment_metadata.xlsx" assuming that it's separated by sheets called "treatment_data", "soil_data" and "plant_data". The order is not relevant.
+
+```{r}
+library(readxl)
+
+# Define source of experiment metadata
+
+sourcemeta <- "experiment_metadata.xlsx"
+
+for (i in excel_sheets(sourcemeta)) {
+  # Import data
+  
+  df <- read_excel(sourcemeta, sheet = i) # import all experiment metadata in separated dataframes per sheet
+  
+  # Wrap up
+  
+  assign(i, df) # name output dataframe
+  rm(df,i) # remove auxiliary "df" and "i" objects
+}
+
+# Add order to treatments
+treatment_data$label <- factor(as.factor(treatment_data$label), levels = c("Control", "Disease suppression", "AMF", "Nitrogen fixation", "Phosphate solubilisation"))
+treatment_data$applied_product <- factor(as.factor(treatment_data$applied_product), levels = c("No product", "Compete Plus", "MycorGran 2.0", "Vixeran", "NuelloPhos"))
+
+# Small processing of soil data
+
+numeric_cols <- names(soil_data)[sapply(soil_data, function(x) any(grepl("[0-9]", x)))] # Auxiliary object listing the columns that contain numbers
+soil_data[numeric_cols] <- lapply(soil_data[numeric_cols], function(x) {
+  x <- ifelse(grepl("^<", x), 0, x) # Identify values beginning with "<", which are below detection limitm and replace them with 0
+  x <- as.numeric(x)  # Convert to numeric AFTER cleaning
+  x
+}) # This function replaces values that start with "<" with 0
+rm(numeric_cols) # Remove auxiliary object
+```
+
+#### 0.3.3) Extract relevant experiment metadata and add to Microresp metadata dataframes
+
+```{r}
+library(dplyr)
+
+# Define relevant metadata to extract. This can be modified for further customisation
+pick_metadata <- c(colnames(soil_data[,c(3,6,10:14)]), # chosen metadata columns in soil_data
+                   colnames(treatment_data[,c(3,5:14)]), # chosen metadata columns in treatment_data
+                   colnames(plant_data[,c()])) # chosen metadata columns in plant_data
+
+# Create a function to replace values in a common column. It will be used to replace labels
+replace_values <- function(df1, df2, col_name, new_col_name) {
+  df1 %>%
+    left_join(df2, by = col_name) %>%  # Join with lookup table
+    mutate(!!col_name := !!sym(new_col_name)) %>% # Replace original values with labels
+    select(-!!sym(new_col_name)) # Delete the new_col_name column can now be deleted
+} # replaces the values of the col_name column in the df1 for the values of the new_col_name in the df2, assuming col_name exist in both dataframes
+
+# Add selected metadata and change labels to metadata dataframe
+
+  meta <- meta %>%
+    
+    # Add defined metadata
+    
+    left_join(select(plant_data, "plant",any_of(pick_metadata)), by = "plant") %>%
+    left_join(select(soil_data, "soil",any_of(pick_metadata)), by = "soil") %>%
+    left_join(select(treatment_data, "treatment",any_of(pick_metadata)), by = "treatment") %>%
+    
+    # Replace compressed labels for full size variables
+    
+    replace_values(plant_data[,1:2], "plant", "label") %>%
+    replace_values(soil_data[,1:2], "soil", "label") %>%
+    replace_values(treatment_data[,1:2], "treatment", "label")
+
+meta
+```
+
+#### 0.3.4) Paste metadata dataframe from 0.3.3) into Results dataframe imported in 0.2)
+
+```{r}
+library(dplyr)
+
+results <- left_join(results,meta,by = "Sample")
+results
+colnames(results)
+```
+
+Simplified view of the dataset
+
+```{r}
+interest_columns <- c("Sample", "soil", "treatment", "Fusarium_growth_14dpi_B_mm", "Fusarium_inhibition_rate", "Fusarium_inhibition_area")
+select(results, interest_columns)
+```
+
+## 1) Data processing
+
+## 2) Data visualization
+
+Just for visual consistency. A standard color palette
+
+```{r}
+# 5 color palette 
+palette_5col <- c("#EB8900", "#47D7AC", "#FAD847", "#2761C4", "#962C5D", "#CC4389")
+# palette_5col <- c("#EB8900", "#2761C4", "#47D7AC", "#CC4389", "#FAD847")
+
+# Treatment palettes based on the 5 color palette
+palette_treatments <- palette_5col
+names(palette_treatments) <- levels(treatment_data$label)
+
+palette_products <- palette_5col
+names(palette_products) <- levels(treatment_data$applied_product)
+```
+
+```{r}
+library(ggplot2)
+library(ggpubr)
+library(ggprism)
+library(plotly)
+
+plot_fusarium_growth <- ggplot(drop_na(results,"Fusarium_growth_14dpi_B_mm")
+       , aes(x = soil, y = Fusarium_growth_6dpi_B_mm, color = treatment)) +
+  geom_point() +
+  geom_boxplot() +
+  scale_color_manual(values = palette_treatments) +
+  theme_prism() + 
+  labs(x = "Soil", y = "Growth (mm)") 
+
+plot_fusarium_inhibition <- ggplot(drop_na(results,"Fusarium_inhibition_rate")
+       , aes(x = soil, y = Fusarium_inhibition_rate, color = treatment)) +
+  geom_point() +
+  geom_boxplot() +
+  scale_color_manual(values = palette_treatments) +
+  theme_prism() + 
+  annotate("text",
+           x = 1.5, # Midpoint of the x-axis, adjust if you have more soil types
+           y = 90, # Place it slightly above the max data point. Adjust this value.
+           label = expression(paste("Inhibition rate (%) = ", 100 * frac(Growth~rate~(mm/day)[Control] - Growth~rate~(mm/day)[Sample], Growth~rate~(mm/day)[Control]))),
+           hjust = 0, # Center horizontally
+           vjust = 0,   # Align the top of the text with the y-coordinate
+           size = 3) +
+  coord_cartesian(clip = "off") + # Allows text to go outside the standard plot area
+  labs(x = "Soil", y = "Rhizosphere inhibitory effect (%)") + ggtitle("F. oxysporum growth inhibition by rhizosphere samples, 6 days after inoculation")
+
+plot_fusarium_inhibition_2 <- ggplot(drop_na(results,"Fusarium_inhibition_area")
+       , aes(x = soil, y = Fusarium_inhibition_area, color = treatment)) +
+  geom_point() +
+  geom_boxplot() +
+  scale_color_manual(values = palette_treatments) +
+    annotate("text",
+           x = 1.5, # Midpoint of the x-axis, adjust if you have more soil types
+           y = 90, # Place it slightly above the max data point. Adjust this value.
+           label = expression(paste("Inhibition rate (%) = ", 100 * frac((Growth~rate~(mm/day)[Control] - Growth~rate~(mm/day)[Sample])^2, (Growth~rate~(mm/day)[Control])^2))),
+           hjust = 0, # Center horizontally
+           vjust = 0,   # Align the top of the text with the y-coordinate
+           size = 3) +
+  coord_cartesian(clip = "off") + # Allows text to go outside the standard plot area
+  theme_prism() + 
+  labs(x = "Soil", y = "Rhizosphere inhibitory area (%)") 
+
+ggarrange(plot_fusarium_growth,plot_fusarium_inhibition, nrow = 1)
+ggplotly(plot_fusarium_growth)
+```
+
+## 4) Statistics
+
+Finding de model that best describes the data:
+
+```{r}
+library(lme4)
+library(nlme)
+library(lmerTest)
+library(pbkrtest)
+
+# Using lmer() function
+
+model_random_a <- lmer(Fusarium_inhibition_rate ~ soil + treatment + soil:treatment + (1|replicate), data = drop_na(results,"Fusarium_growth_rate_B_mmday")) # Mixed model with soil, treatment and their interaction as fixed effect, plus a random replicate effect
+
+
+model_nest_a <- lmer(Fusarium_inhibition_rate ~ soil + treatment + soil:treatment + (1|treatment:replicate), data = drop_na(results,"Fusarium_growth_rate_B_mmday")) # Same as before, but the replicate effect is nested inside the treatment.
+
+# Using lme() function
+
+model_random_b <- lme(Fusarium_inhibition_rate ~ soil + treatment + soil:treatment, random = ~ 1|replicate, data = drop_na(results,"Fusarium_growth_rate_B_mmday")) # Mixed model with soil, treatment and their interaction as fixed effect, plus a random replicate effect
+
+model_nest_b <- lme(Fusarium_inhibition_rate ~ soil + treatment + soil:treatment, random = ~ 1|soil/replicate, data = drop_na(results,"Fusarium_growth_rate_B_mmday")) # Same as before, but the replicate effect is nested inside the treatment.
+
+# Using lm() function
+
+model_fixed <- lm(Fusarium_inhibition_rate ~ soil/replicate + soil + treatment + soil:treatment, data = drop_na(results,"Fusarium_growth_rate_B_mmday")) # Linear model with soil, treatment, their interaction and the replicate effect all defined as fixed factors.
+
+
+### The mixed models with no nesting of the replicate effect were more successful on fitting the data, therefore explain better the dataset and will be used in further analyses.
+
+summary(model_random_a)
+summary(model_random_b)
+
+anova(model_random_a)
+anova.lme(model_random_b)
+
+```
+
+The model suggest there is a soil effect and a treatment effect for some soils. The ANOVA did not find the treatment effect nor the soil:treatment interaction to be significant. Nonetheless, the treatment effect was non-significant by a not-so-big margin. The comparison will be carried then in a within soil basis.
+
+```{r}
+library(emmeans)
+# library(multcomp)
+library(dplyr)
+
+# aov(Fusarium_inhibition_rate ~ treatment, filter(drop_na(results,"Fusarium_growth_rate_B_mmday"), soil == "Clay"))
+
+# Get estimated marginal means for the 'group' factor
+(paircomp <- emmeans(model_random_a, pairwise ~ treatment|soil, adjust = "tukey"))
+
+# categories <- cld(paircomp, 
+#     alpha = 0.05, 
+#     Letters = LETTERS, # Use capital letters for groups
+#     adjust = "Tukey")
+# 
+# as.data.frame(categories)
+
+# plot_fusarium_inhibition + geom_signif(paircomp)
+```
