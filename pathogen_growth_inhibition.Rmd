@@ -293,16 +293,23 @@ model_nest_b <- lme(Fusarium_inhibition_rate ~ soil + treatment + soil:treatment
 
 # Using lm() function
 
-model_fixed <- lm(Fusarium_inhibition_rate ~ soil/replicate + soil + treatment + soil:treatment, data = drop_na(results,"Fusarium_growth_rate_B_mmday")) # Linear model with soil, treatment, their interaction and the replicate effect all defined as fixed factors.
+model_fixed_a <- lm(Fusarium_inhibition_rate ~ soil/replicate + soil + treatment + soil:treatment, data = drop_na(results,"Fusarium_growth_rate_B_mmday")) # Linear model with soil, treatment, their interaction and the replicate effect all defined as fixed factors.
+
+model_fixed_b <- lm(Fusarium_inhibition_rate ~ soil + treatment + soil:treatment, data = drop_na(results,"Fusarium_growth_rate_B_mmday")) # Linear model with soil, treatment and their interactions as fixed factors, disregarding replicate effect entirely.
 
 
 ### The mixed models with no nesting of the replicate effect were more successful on fitting the data, therefore explain better the dataset and will be used in further analyses.
 
-# summary(model_random_a)
-summary(model_random_b)
+summary(model_random_a)
+# summary(model_random_b)
+# summary(model_fixed_a)
+# summary(model_fixed_b)
 
-# anova(model_random_a)
-anova.lme(model_random_b)
+anova(model_random_a)
+# anova.lme(model_random_b)
+# anova(model_fixed_a)
+# anova(model_fixed_b)
+
 
 ```
 
@@ -317,6 +324,7 @@ library(dplyr)
 
 # Get estimated marginal means for the 'group' factor
 (paircomp <- emmeans(model_random_a, pairwise ~ treatment|soil, adjust = "tukey"))
+# (paircomp <- emmeans(model_random_a, pairwise ~ treatment|soil_texture_main, adjust = "tukey"))
 ```
 
 According to the multiple comparisons analysis, the only soil where the treatment produces a significant change is in the Clay soil. The additional sample measurement for the Sandy high Phosphate soil might change the result for this comparison.
