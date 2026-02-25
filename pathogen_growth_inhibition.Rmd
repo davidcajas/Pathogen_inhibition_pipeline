@@ -11,7 +11,7 @@ always_allow_html: true
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, fig.width = 9.6, fig.height = 5.4, dpi = 200)
+knitr::opts_chunk$set(echo = TRUE, fig.width = 2*1920/300, fig.height = 2*1080/300, dpi = 300)
 ```
 
 ## 0) Data import
@@ -85,7 +85,7 @@ results$Agrobacterium_colonies_5dpi_B_relative_growth <- as.factor(results$Agrob
 
 ### 0.3) Import samples metadata
 
-#### 0.3.1) Import metadata from samples 
+#### 0.3.1) Import metadata from samples
 
 ```{r}
 library(readxl)
@@ -323,8 +323,14 @@ library(emmeans)
 library(dplyr)
 
 # Get estimated marginal means for the 'group' factor
-(paircomp <- emmeans(model_random_a, pairwise ~ treatment|soil, adjust = "tukey"))
+paircomp <- emmeans(model_random_a, pairwise ~ treatment|soil, adjust = "tukey")
 # (paircomp <- emmeans(model_random_a, pairwise ~ treatment|soil_texture_main, adjust = "tukey"))
+
+significant <- as.data.frame(paircomp$contrasts)[as.data.frame(paircomp$contrasts)$p.value < 0.1, ]
+significant <- separate(significant, contrast, into = c("treatment1", "treatment2"), sep = " - ")
+
+significant
+
 ```
 
 According to the multiple comparisons analysis, the only soil where the treatment produces a significant change is in the Clay soil. The additional sample measurement for the Sandy high Phosphate soil might change the result for this comparison.
@@ -333,4 +339,26 @@ According to the multiple comparisons analysis, the only soil where the treatmen
 
 ```{r}
 
+significant <- significant %>%
+  group_by(soil) %>%
+  mutate(y_position = max(as.data.frame(paircomp)$upper.CL) * 1.05 + 
+                        (row_number() - 1) * max(as.data.frame(paircomp)$upper.CL) * 0.1) %>%
+  ungroup()
+
+ggplot(drop_na(results,"Fusarium_inhibition_rate")
+       , aes(x = treatment, y = Fusarium_inhibition_rate, color = treatment)) +
+  facet_wrap(~soil, nrow = 1) +
+  geom_boxplot() +
+  scale_color_manual(values = palette_treatments) +
+  theme_prism() +
+  coord_cartesian(clip = "off") + # Allows text to go outside the standard plot area
+  theme(axis.text.x = element_blank()) + 
+  labs(x = "", y = "Rhizosphere inhibitory effect (%)") + ggtitle("F. oxysporum growth inhibition by soil samples") + 
+  geom_signif(
+  data = significant,
+  aes(xmin = treatment1, xmax = treatment2, annotations = round(p.value, 3),
+  y_position = y_position), # Position the annotations
+  manual = TRUE,
+  inherit.aes = FALSE
+)
 ```

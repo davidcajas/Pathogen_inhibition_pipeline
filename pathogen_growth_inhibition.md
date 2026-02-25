@@ -1,7 +1,7 @@
 Microresp pipeline
 ================
 David Rodrigo Cajas
-2025-06-19
+2025-08-20
 
 - [0) Data import](#0-data-import)
   - [0.1) Working directory and
@@ -259,9 +259,9 @@ meta
     ##  9 9      Bare soil Clay  Control             4             7.24          0.539
     ## 10 10     Bare soil Clay  Control             5             9.09          0.550
     ## # ℹ 30 more rows
-    ## # ℹ 18 more variables: origin_location <chr>, soil_texture <chr>,
-    ## #   CaCO3_perc <dbl>, NOM_perc <dbl>, pH <dbl>, `P-CaCl2_mgP/kg` <dbl>,
-    ## #   `P-AL_mgP/kg` <dbl>, applied_product <fct>, target_function <chr>,
+    ## # ℹ 18 more variables: origin_location <chr>, soil_texture_main <chr>,
+    ## #   clay_perc <dbl>, CaCO3_perc <dbl>, NOM_perc <dbl>, pH <dbl>,
+    ## #   `P-CaCl2_mgP/kg` <dbl>, applied_product <fct>, target_function <chr>,
     ## #   active_principle_1 <chr>, active_principle_2 <chr>,
     ## #   active_principle_3 <chr>, active_principle_4 <chr>,
     ## #   active_principle_5 <chr>, active_principle_6 <chr>, …
@@ -511,79 +511,87 @@ model_nest_b <- lme(Fusarium_inhibition_rate ~ soil + treatment + soil:treatment
 
 # Using lm() function
 
-model_fixed <- lm(Fusarium_inhibition_rate ~ soil/replicate + soil + treatment + soil:treatment, data = drop_na(results,"Fusarium_growth_rate_B_mmday")) # Linear model with soil, treatment, their interaction and the replicate effect all defined as fixed factors.
+model_fixed_a <- lm(Fusarium_inhibition_rate ~ soil/replicate + soil + treatment + soil:treatment, data = drop_na(results,"Fusarium_growth_rate_B_mmday")) # Linear model with soil, treatment, their interaction and the replicate effect all defined as fixed factors.
+
+model_fixed_b <- lm(Fusarium_inhibition_rate ~ soil + treatment + soil:treatment, data = drop_na(results,"Fusarium_growth_rate_B_mmday")) # Linear model with soil, treatment and their interactions as fixed factors, disregarding replicate effect entirely.
 
 
 ### The mixed models with no nesting of the replicate effect were more successful on fitting the data, therefore explain better the dataset and will be used in further analyses.
 
-# summary(model_random_a)
-summary(model_random_b)
+summary(model_random_a)
 ```
 
-    ## Linear mixed-effects model fit by REML
-    ##   Data: drop_na(results, "Fusarium_growth_rate_B_mmday") 
-    ##        AIC      BIC    logLik
-    ##   190.7611 203.7195 -85.38054
+    ## Linear mixed model fit by REML. t-tests use Satterthwaite's method [
+    ## lmerModLmerTest]
+    ## Formula: Fusarium_inhibition_rate ~ soil + treatment + soil:treatment +  
+    ##     (1 | replicate)
+    ##    Data: drop_na(results, "Fusarium_growth_rate_B_mmday")
+    ## 
+    ## REML criterion at convergence: 205.7
+    ## 
+    ## Scaled residuals: 
+    ##      Min       1Q   Median       3Q      Max 
+    ## -2.50400 -0.50477 -0.01913  0.48058  2.07612 
     ## 
     ## Random effects:
-    ##  Formula: ~1 | replicate
-    ##         (Intercept) Residual
-    ## StdDev:   0.8553691  4.53033
+    ##  Groups    Name        Variance Std.Dev.
+    ##  replicate (Intercept)  2.741   1.656   
+    ##  Residual              22.227   4.715   
+    ## Number of obs: 40, groups:  replicate, 5
     ## 
-    ## Fixed effects:  Fusarium_inhibition_rate ~ soil + treatment + soil:treatment 
-    ##                                                       Value Std.Error DF
-    ## (Intercept)                                        80.57162  2.061822 23
-    ## soilSandy high Phos                                -5.92650  3.044151 23
-    ## soilSandy low Phos                                  0.27308  3.043893 23
-    ## soilSandy not managed                              -5.06076  3.044151 23
-    ## treatmentDisease suppression                       -9.28871  2.865232 23
-    ## soilSandy high Phos:treatmentDisease suppression   13.43632  4.180480 23
-    ## soilSandy low Phos:treatmentDisease suppression     8.68610  4.180292 23
-    ## soilSandy not managed:treatmentDisease suppression 12.60939  4.497862 23
-    ##                                                     t-value p-value
-    ## (Intercept)                                        39.07788  0.0000
-    ## soilSandy high Phos                                -1.94685  0.0639
-    ## soilSandy low Phos                                  0.08972  0.9293
-    ## soilSandy not managed                              -1.66245  0.1100
-    ## treatmentDisease suppression                       -3.24187  0.0036
-    ## soilSandy high Phos:treatmentDisease suppression    3.21406  0.0038
-    ## soilSandy low Phos:treatmentDisease suppression     2.07787  0.0491
-    ## soilSandy not managed:treatmentDisease suppression  2.80342  0.0101
-    ##  Correlation: 
-    ##                                                    (Intr) slSnhP slSnlP slSnnm
-    ## soilSandy high Phos                                -0.654                     
-    ## soilSandy low Phos                                 -0.654  0.442              
-    ## soilSandy not managed                              -0.654  0.446  0.442       
-    ## treatmentDisease suppression                       -0.695  0.471  0.471  0.471
-    ## soilSandy high Phos:treatmentDisease suppression    0.476 -0.728 -0.322 -0.325
-    ## soilSandy low Phos:treatmentDisease suppression     0.476 -0.322 -0.728 -0.322
-    ## soilSandy not managed:treatmentDisease suppression  0.443 -0.300 -0.301 -0.675
-    ##                                                    trtmDs sShP:s sSlP:s
-    ## soilSandy high Phos                                                    
-    ## soilSandy low Phos                                                     
-    ## soilSandy not managed                                                  
-    ## treatmentDisease suppression                                           
-    ## soilSandy high Phos:treatmentDisease suppression   -0.685              
-    ## soilSandy low Phos:treatmentDisease suppression    -0.685  0.469       
-    ## soilSandy not managed:treatmentDisease suppression -0.637  0.437  0.437
+    ## Fixed effects:
+    ##                                                    Estimate Std. Error     df
+    ## (Intercept)                                          81.214      2.235 29.511
+    ## soilSandy high Phos                                  -4.756      2.982 28.000
+    ## soilSandy low Phos                                    1.484      2.982 28.000
+    ## soilSandy not managed                                -3.896      2.982 28.000
+    ## treatmentDisease suppression                         -9.932      2.982 28.000
+    ## soilSandy high Phos:treatmentDisease suppression     12.266      4.217 28.000
+    ## soilSandy low Phos:treatmentDisease suppression       7.475      4.217 28.000
+    ## soilSandy not managed:treatmentDisease suppression   13.082      4.217 28.000
+    ##                                                    t value Pr(>|t|)    
+    ## (Intercept)                                         36.344  < 2e-16 ***
+    ## soilSandy high Phos                                 -1.595  0.12194    
+    ## soilSandy low Phos                                   0.498  0.62248    
+    ## soilSandy not managed                               -1.307  0.20194    
+    ## treatmentDisease suppression                        -3.331  0.00244 ** 
+    ## soilSandy high Phos:treatmentDisease suppression     2.909  0.00703 ** 
+    ## soilSandy low Phos:treatmentDisease suppression      1.773  0.08718 .  
+    ## soilSandy not managed:treatmentDisease suppression   3.102  0.00435 ** 
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Standardized Within-Group Residuals:
-    ##         Min          Q1         Med          Q3         Max 
-    ## -2.49141596 -0.50915646 -0.01754574  0.51314894  2.64135016 
-    ## 
-    ## Number of Observations: 35
-    ## Number of Groups: 5
+    ## Correlation of Fixed Effects:
+    ##             (Intr) slSnhP slSnlP slSnnm trtmDs sShP:s sSlP:s
+    ## slSndyhghPh -0.667                                          
+    ## slSndylwPhs -0.667  0.500                                   
+    ## slSndyntmng -0.667  0.500  0.500                            
+    ## trtmntDsssp -0.667  0.500  0.500  0.500                     
+    ## slShPhs:tDs  0.472 -0.707 -0.354 -0.354 -0.707              
+    ## slSlPhs:tDs  0.472 -0.354 -0.707 -0.354 -0.707  0.500       
+    ## slSnmngd:Ds  0.472 -0.354 -0.354 -0.707 -0.707  0.500  0.500
 
 ``` r
-# anova(model_random_a)
-anova.lme(model_random_b)
+# summary(model_random_b)
+# summary(model_fixed_a)
+# summary(model_fixed_b)
+
+anova(model_random_a)
 ```
 
-    ##                numDF denDF  F-value p-value
-    ## (Intercept)        1    23 8180.111  <.0001
-    ## soil               3    23    1.795  0.1763
-    ## treatment          1    23    0.531  0.4736
-    ## soil:treatment     3    23    4.264  0.0156
+    ## Type III Analysis of Variance Table with Satterthwaite's method
+    ##                 Sum Sq Mean Sq NumDF DenDF F value  Pr(>F)  
+    ## soil           147.974  49.325     3    28  2.2192 0.10798  
+    ## treatment       29.786  29.786     1    28  1.3401 0.25680  
+    ## soil:treatment 270.333  90.111     3    28  4.0542 0.01638 *
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+``` r
+# anova.lme(model_random_b)
+# anova(model_fixed_a)
+# anova(model_fixed_b)
+```
 
 The mixed linear model suggests there is are inconsistent soil effects
 and treatment effects. The ANOVA does not find significant soil or
@@ -606,51 +614,17 @@ library(emmeans)
 library(dplyr)
 
 # Get estimated marginal means for the 'group' factor
-(paircomp <- emmeans(model_random_a, pairwise ~ treatment|soil, adjust = "tukey"))
+paircomp <- emmeans(model_random_a, pairwise ~ treatment|soil, adjust = "tukey")
+# (paircomp <- emmeans(model_random_a, pairwise ~ treatment|soil_texture_main, adjust = "tukey"))
+
+significant <- as.data.frame(paircomp$contrasts)[as.data.frame(paircomp$contrasts)$p.value < 0.1, ]
+significant <- separate(significant, contrast, into = c("treatment1", "treatment2"), sep = " - ")
+
+significant
 ```
 
-    ## $emmeans
-    ## soil = Clay:
-    ##  treatment           emmean   SE   df lower.CL upper.CL
-    ##  Control               80.6 2.06 26.8     76.3     84.8
-    ##  Disease suppression   71.3 2.06 26.8     67.1     75.5
-    ## 
-    ## soil = Sandy high Phos:
-    ##  treatment           emmean   SE   df lower.CL upper.CL
-    ##  Control               74.6 2.33 26.9     69.9     79.4
-    ##  Disease suppression   78.8 2.06 26.8     74.6     83.0
-    ## 
-    ## soil = Sandy low Phos:
-    ##  treatment           emmean   SE   df lower.CL upper.CL
-    ##  Control               80.8 2.33 26.9     76.1     85.6
-    ##  Disease suppression   80.2 2.06 26.8     76.0     84.5
-    ## 
-    ## soil = Sandy not managed:
-    ##  treatment           emmean   SE   df lower.CL upper.CL
-    ##  Control               75.5 2.33 26.9     70.7     80.3
-    ##  Disease suppression   78.8 2.72 27.0     73.2     84.4
-    ## 
-    ## Degrees-of-freedom method: kenward-roger 
-    ## Confidence level used: 0.95 
-    ## 
-    ## $contrasts
-    ## soil = Clay:
-    ##  contrast                      estimate   SE   df t.ratio p.value
-    ##  Control - Disease suppression    9.289 2.87 23.1   3.242  0.0036
-    ## 
-    ## soil = Sandy high Phos:
-    ##  contrast                      estimate   SE   df t.ratio p.value
-    ##  Control - Disease suppression   -4.148 3.06 23.7  -1.354  0.1886
-    ## 
-    ## soil = Sandy low Phos:
-    ##  contrast                      estimate   SE   df t.ratio p.value
-    ##  Control - Disease suppression    0.603 3.07 23.7   0.196  0.8459
-    ## 
-    ## soil = Sandy not managed:
-    ##  contrast                      estimate   SE   df t.ratio p.value
-    ##  Control - Disease suppression   -3.321 3.50 23.8  -0.948  0.3524
-    ## 
-    ## Degrees-of-freedom method: kenward-roger
+    ##   treatment1          treatment2 soil estimate       SE df t.ratio     p.value
+    ## 1    Control Disease suppression Clay 9.931565 2.981727 28 3.33081 0.002440228
 
 According to the multiple comparisons analysis, the only soil where the
 treatment produces a significant change is in the Clay soil. The
@@ -658,3 +632,45 @@ additional sample measurement for the Sandy high Phosphate soil might
 change the result for this comparison.
 
 ### 3.3) Add statistics to the original plot
+
+``` r
+significant <- significant %>%
+  group_by(soil) %>%
+  mutate(y_position = max(as.data.frame(paircomp)$upper.CL) * 1.05 + 
+                        (row_number() - 1) * max(as.data.frame(paircomp)$upper.CL) * 0.1) %>%
+  ungroup()
+```
+
+    ## Warning: There were 2 warnings in `mutate()`.
+    ## The first warning was:
+    ## ℹ In argument: `y_position = +...`.
+    ## ℹ In group 1: `soil = Clay`.
+    ## Caused by warning in `as.data.frame.emm_list()`:
+    ## ! Note: 'as.data.frame' has combined your 2 sets of results into one object,
+    ## and this affects things like adjusted P values. Refer to the annotations.
+    ## ℹ Run `dplyr::last_dplyr_warnings()` to see the 1 remaining warning.
+
+``` r
+ggplot(drop_na(results,"Fusarium_inhibition_rate")
+       , aes(x = treatment, y = Fusarium_inhibition_rate, color = treatment)) +
+  facet_wrap(~soil, nrow = 1) +
+  geom_boxplot() +
+  scale_color_manual(values = palette_treatments) +
+  theme_prism() +
+  coord_cartesian(clip = "off") + # Allows text to go outside the standard plot area
+  theme(axis.text.x = element_blank()) + 
+  labs(x = "", y = "Rhizosphere inhibitory effect (%)") + ggtitle("F. oxysporum growth inhibition by soil samples") + 
+  geom_signif(
+  data = significant,
+  aes(xmin = treatment1, xmax = treatment2, annotations = round(p.value, 3),
+  y_position = y_position), # Position the annotations
+  manual = TRUE,
+  inherit.aes = FALSE
+)
+```
+
+    ## Warning in geom_signif(data = significant, aes(xmin = treatment1, xmax =
+    ## treatment2, : Ignoring unknown aesthetics: xmin, xmax, annotations, and
+    ## y_position
+
+![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
