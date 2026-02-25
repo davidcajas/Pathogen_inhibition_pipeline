@@ -1,7 +1,7 @@
 Microresp pipeline
 ================
 David Rodrigo Cajas
-2025-08-20
+2026-02-25
 
 - [0) Data import](#0-data-import)
   - [0.1) Working directory and
@@ -303,9 +303,10 @@ Some calculations will be done to further process the data:
 - Fungal growth rate:
   $Growth~rate~(mm/day) = \frac{colony~radius~(mm)}{time~(days)}$
 
-- Inhibition rate (based on [Kamaruzzaman et
-  al. 2021](https://www.sciencedirect.com/science/article/pii/S1878535221003051)):
-  $Inhibition~rate~(\%) = \frac{Growth~rate~(mm/day)_{Control} - Growth~rate~(mm/day)_{Sample}}{Growth~rate~(mm/day)_{Control}} \times 100$
+- Inhibition rate (based on [Sarven MS et
+  al. 2020](https://www.mdpi.com/2076-0817/9/3/213). doi
+  10.3390/pathogens9030213):
+  $Inhibition~rate~(\%) = \frac{Growth~rate~(mm/day)_{Sterile} - Growth~rate~(mm/day)_{Sample}}{Growth~rate~(mm/day)_{Sterile}} \times 100$
 
 ``` r
 # Calculate growth rates
@@ -396,14 +397,23 @@ library(plotly)
     ##     layout
 
 ``` r
-plot_fusarium_growth <- ggplot(drop_na(results,"Fusarium_growth_14dpi_B_mm")
-       , aes(x = soil, y = Fusarium_growth_6dpi_B_mm, color = treatment)) +
+plot_fusarium_growth_sterile <- ggplot(drop_na(drop_na(results,"treatment"),"Fusarium_growth_6dpi_A_sterile_mm")
+       , aes(x = soil, y = Fusarium_growth_6dpi_A_sterile_mm, color = treatment)) +
   geom_point() +
   geom_boxplot() +
   scale_color_manual(values = palette_treatments) +
   theme_prism() + 
   labs(x = "Soil", y = "Growth (mm)") +
-  ggtitle("F. oxysporum colony radius in non-autoclaved plates")
+  ggtitle("F. oxysporum colony radius in autoclaved plates 6 days post-inoculation")
+
+plot_fusarium_growth_sample <- ggplot(drop_na(results,"Fusarium_growth_14dpi_B_mm")
+       , aes(x = soil, y = Fusarium_growth_14dpi_B_mm, color = treatment)) +
+  geom_point() +
+  geom_boxplot() +
+  scale_color_manual(values = palette_treatments) +
+  theme_prism() + 
+  labs(x = "Soil", y = "Growth (mm)") +
+  ggtitle("F. oxysporum colony radius in non-autoclaved plates 14 days post-inoculation")
 
 plot_fusarium_inhibition <- ggplot(drop_na(results,"Fusarium_inhibition_rate")
        , aes(x = soil, y = Fusarium_inhibition_rate, color = treatment)) +
@@ -414,26 +424,29 @@ plot_fusarium_inhibition <- ggplot(drop_na(results,"Fusarium_inhibition_rate")
   annotate("text",
            x = 1.5, # Midpoint of the x-axis, adjust if you have more soil types
            y = 90, # Place it slightly above the max data point. Adjust this value.
-           label = expression(paste("Inhibition rate (%) = ", 100 * frac(Growth~rate~(mm/day)[Control] - Growth~rate~(mm/day)[Sample], Growth~rate~(mm/day)[Control]))),
+           label = expression(paste("Inhibition rate (%) = ", 100 * frac(Growth~rate~(mm/day)[Sterile] - Growth~rate~(mm/day)[Sample], Growth~rate~(mm/day)[Sterile]))),
            hjust = 0, # Center horizontally
            vjust = 0,   # Align the top of the text with the y-coordinate
            size = 3) +
   coord_cartesian(clip = "off") + # Allows text to go outside the standard plot area
   labs(x = "Soil", y = "Rhizosphere inhibitory effect (%)") + ggtitle("F. oxysporum growth inhibition by soil samples")
 
-ggarrange(plot_fusarium_growth,plot_fusarium_inhibition, nrow = 1, common.legend = T)
+ggarrange(plot_fusarium_growth_sterile,plot_fusarium_growth_sample, nrow = 1, common.legend = T)
 ```
-
-    ## Warning in is.na(x): is.na() applied to non-(list or vector) of type
-    ## 'expression'
 
 ![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
 
 ``` r
-plot_fusarium_growth
+plot_fusarium_growth_sterile
 ```
 
 ![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-13-2.png)<!-- -->
+
+``` r
+plot_fusarium_growth_sample
+```
+
+![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-13-3.png)<!-- -->
 
 ``` r
 plot_fusarium_inhibition
@@ -442,7 +455,7 @@ plot_fusarium_inhibition
     ## Warning in is.na(x): is.na() applied to non-(list or vector) of type
     ## 'expression'
 
-![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-13-3.png)<!-- -->
+![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-13-4.png)<!-- -->
 
 ## 3) Statistics
 
