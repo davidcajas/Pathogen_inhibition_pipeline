@@ -390,7 +390,7 @@ According to the multiple comparisons analysis, the only soil where the treatmen
 
 ### 3.3) Add statistics to the original plot
 
-```{r, fig.width=9, fig.height=6, dev='pdf'}
+```{r, fig.width=9, fig.height=6}
 # print in 6 x 9 in
 plot_growth_inhb <- ggplot(drop_na(results,"Fusarium_inhibition_rate")
        , aes(x = treatment, y = Fusarium_inhibition_rate, color = treatment)) +
@@ -416,6 +416,11 @@ plot_growth_inhb <- ggplot(drop_na(results,"Fusarium_inhibition_rate")
 plot_growth_inhb
 # for simpler code, but using default ANOVA + Wilcoxon, stat_compare_means(label = "p.signif") can be used instead of geom_signif()
 
+```
+
+```{r, fig.width=9, fig.height=6, dev='pdf', echo=FALSE}
+plot_growth_inhb
+# PDF version of the publishable plot
 ```
 
 \
