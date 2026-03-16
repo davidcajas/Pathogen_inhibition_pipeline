@@ -1,7 +1,7 @@
 Microresp pipeline
 ================
 David Rodrigo Cajas
-2026-02-25
+2026-03-16
 
 - [0) Data import](#0-data-import)
   - [0.1) Working directory and
@@ -177,6 +177,7 @@ relevant.
 
 ``` r
 library(readxl)
+library(forcats)
 
 # Define source of experiment metadata
 
@@ -196,6 +197,9 @@ for (i in excel_sheets(sourcemeta)) {
 # Add order to treatments
 treatment_data$label <- factor(as.factor(treatment_data$label), levels = c("Control", "Disease suppression", "AMF", "Nitrogen fixation", "Phosphate solubilisation"))
 treatment_data$applied_product <- factor(as.factor(treatment_data$applied_product), levels = c("No product", "Compete Plus", "MycorGran 2.0", "Vixeran", "NuelloPhos"))
+
+soil_data$label <- fct_inorder(soil_data$label) # This function (from forcats pkg) is equivalent to factor but applies the order of appearance to the levels instead of alphabetical.
+soil_data$origin_location <- fct_inorder(soil_data$origin_location)
 
 # Small processing of soil data
 
@@ -247,7 +251,7 @@ meta
 
     ## # A tibble: 40 × 25
     ##    Sample plant     soil  treatment           replicate moisture weight_for_0.5
-    ##    <fct>  <chr>     <chr> <fct>               <fct>        <dbl>          <dbl>
+    ##    <fct>  <chr>     <fct> <fct>               <fct>        <dbl>          <dbl>
     ##  1 1      Bare soil Clay  Disease suppression 1             6.67          0.536
     ##  2 2      Bare soil Clay  Disease suppression 2             8.79          0.548
     ##  3 3      Bare soil Clay  Disease suppression 3             7.12          0.538
@@ -259,7 +263,7 @@ meta
     ##  9 9      Bare soil Clay  Control             4             7.24          0.539
     ## 10 10     Bare soil Clay  Control             5             9.09          0.550
     ## # ℹ 30 more rows
-    ## # ℹ 18 more variables: origin_location <chr>, soil_texture_main <chr>,
+    ## # ℹ 18 more variables: origin_location <fct>, soil_texture_main <chr>,
     ## #   clay_perc <dbl>, CaCO3_perc <dbl>, NOM_perc <dbl>, pH <dbl>,
     ## #   `P-CaCl2_mgP/kg` <dbl>, applied_product <fct>, target_function <chr>,
     ## #   active_principle_1 <chr>, active_principle_2 <chr>,
@@ -295,6 +299,37 @@ results
     ## #   Fusarium_growth_14dpi_B_mm <dbl>,
     ## #   `Agrobacterium_colonies_5dpi_A_sterile_#` <dbl>,
     ## #   Agrobacterium_dilution_A_sterile <dbl>, …
+
+#### 0.3.5) Add 2-lines metadata entries
+
+``` r
+library(plotly)
+```
+
+    ## 
+    ## Attaching package: 'plotly'
+
+    ## The following object is masked from 'package:ggplot2':
+    ## 
+    ##     last_plot
+
+    ## The following object is masked from 'package:stats':
+    ## 
+    ##     filter
+
+    ## The following object is masked from 'package:graphics':
+    ## 
+    ##     layout
+
+``` r
+results <- mutate(results, soil_type = ifelse(is.na(origin_location) | is.na(soil), NA, paste0(origin_location, " \n", soil))) # Add a column that has both the soil type and origin information in one new column
+
+results$soil_type <- factor(results$soil_type, levels = levels(fct_inorder(arrange(results,soil)$soil_type))) # Format new column as a factor, using the order of "soil" column levels.
+
+results <- mutate(results, treatment_full = ifelse(is.na(applied_product) | is.na(treatment), NA, paste0(applied_product, " \n", treatment))) # Add a column that has both the treatment commercial name and target effect information in one new column
+
+results$treatment_full <- factor(results$treatment_full, levels = levels(fct_inorder(arrange(results,treatment)$treatment_full))) # Format new column as a factor, using the order of "treatment" column levels.
+```
 
 ## 1) Data processing
 
@@ -341,7 +376,7 @@ select(results, interest_columns)
 
     ## # A tibble: 44 × 5
     ##    Sample          soil  treatment Fusarium_growth_14dp…¹ Fusarium_inhibition_…²
-    ##    <fct>           <chr> <fct>                      <dbl>                  <dbl>
+    ##    <fct>           <fct> <fct>                      <dbl>                  <dbl>
     ##  1 Postitive_cont… <NA>  <NA>                        NA                     NA  
     ##  2 1               Clay  Disease …                   13.5                   75.2
     ##  3 2               Clay  Disease …                   17.8                   74.6
@@ -370,6 +405,9 @@ names(palette_treatments) <- levels(treatment_data$label)
 
 palette_products <- palette_5col
 names(palette_products) <- levels(treatment_data$applied_product)
+
+palette_treatments_full <- palette_5col
+names(palette_products) <- levels(results$treatment_full)
 ```
 
 Plot both the raw measurements along with the inhibition rate indicator
@@ -379,24 +417,7 @@ library(ggplot2)
 library(ggpubr)
 library(ggprism)
 library(plotly)
-```
 
-    ## 
-    ## Attaching package: 'plotly'
-
-    ## The following object is masked from 'package:ggplot2':
-    ## 
-    ##     last_plot
-
-    ## The following object is masked from 'package:stats':
-    ## 
-    ##     filter
-
-    ## The following object is masked from 'package:graphics':
-    ## 
-    ##     layout
-
-``` r
 plot_fusarium_growth_sterile <- ggplot(drop_na(drop_na(results,"treatment"),"Fusarium_growth_6dpi_A_sterile_mm")
        , aes(x = soil, y = Fusarium_growth_6dpi_A_sterile_mm, color = treatment)) +
   geom_point() +
@@ -434,19 +455,19 @@ plot_fusarium_inhibition <- ggplot(drop_na(results,"Fusarium_inhibition_rate")
 ggarrange(plot_fusarium_growth_sterile,plot_fusarium_growth_sample, nrow = 1, common.legend = T)
 ```
 
-![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
+![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
 
 ``` r
 plot_fusarium_growth_sterile
 ```
 
-![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-13-2.png)<!-- -->
+![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-14-2.png)<!-- -->
 
 ``` r
 plot_fusarium_growth_sample
 ```
 
-![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-13-3.png)<!-- -->
+![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-14-3.png)<!-- -->
 
 ``` r
 plot_fusarium_inhibition
@@ -455,7 +476,7 @@ plot_fusarium_inhibition
     ## Warning in is.na(x): is.na() applied to non-(list or vector) of type
     ## 'expression'
 
-![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-13-4.png)<!-- -->
+![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-14-4.png)<!-- -->
 
 ## 3) Statistics
 
@@ -630,28 +651,24 @@ library(dplyr)
 paircomp <- emmeans(model_random_a, pairwise ~ treatment|soil, adjust = "tukey")
 # (paircomp <- emmeans(model_random_a, pairwise ~ treatment|soil_texture_main, adjust = "tukey"))
 
+# Extract only the significant values
 significant <- as.data.frame(paircomp$contrasts)[as.data.frame(paircomp$contrasts)$p.value < 0.1, ]
 significant <- separate(significant, contrast, into = c("treatment1", "treatment2"), sep = " - ")
 
-significant
-```
+# Add asterisk-based symbols
+significant <- mutate(significant, p.signif = case_when(
+    p.value <= 0.001 ~ "***",
+    p.value <= 0.01  ~ "**",
+    p.value <= 0.05  ~ "*",
+    TRUE             ~ "ns"
+  ))
 
-    ##   treatment1          treatment2 soil estimate       SE df t.ratio     p.value
-    ## 1    Control Disease suppression Clay 9.931565 2.981727 28 3.33081 0.002440228
-
-According to the multiple comparisons analysis, the only soil where the
-treatment produces a significant change is in the Clay soil. The
-additional sample measurement for the Sandy high Phosphate soil might
-change the result for this comparison.
-
-### 3.3) Add statistics to the original plot
-
-``` r
+# Add a y_position value for ggplot to use it as a reference
 significant <- significant %>%
   group_by(soil) %>%
-  mutate(y_position = max(as.data.frame(paircomp)$upper.CL) * 1.05 + 
+  mutate(y_position = as.data.frame(paircomp)$upper.CL[1:nrow(significant)] * 1 + 
                         (row_number() - 1) * max(as.data.frame(paircomp)$upper.CL) * 0.1) %>%
-  ungroup()
+  ungroup() 
 ```
 
     ## Warning: There were 2 warnings in `mutate()`.
@@ -664,26 +681,64 @@ significant <- significant %>%
     ## ℹ Run `dplyr::last_dplyr_warnings()` to see the 1 remaining warning.
 
 ``` r
-ggplot(drop_na(results,"Fusarium_inhibition_rate")
+# Add a soil_type column so it can be used as a variable as well for plotting
+significant <- left_join(significant, results %>%
+  select(soil, soil_type) %>%
+  distinct() %>%
+  drop_na(), by = "soil")
+
+significant
+```
+
+    ## # A tibble: 1 × 11
+    ##   treatment1 treatment2      soil  estimate    SE    df t.ratio p.value p.signif
+    ##   <chr>      <chr>           <fct>    <dbl> <dbl> <dbl>   <dbl>   <dbl> <chr>   
+    ## 1 Control    Disease suppre… Clay      9.93  2.98  28.0    3.33 0.00244 **      
+    ## # ℹ 2 more variables: y_position <dbl>, soil_type <fct>
+
+According to the multiple comparisons analysis, the only soil where the
+treatment produces a significant change is in the Clay soil. The
+additional sample measurement for the Sandy high Phosphate soil might
+change the result for this comparison.
+
+### 3.3) Add statistics to the original plot
+
+``` r
+# print in 6 x 9 in
+plot_growth_inhb <- ggplot(drop_na(results,"Fusarium_inhibition_rate")
        , aes(x = treatment, y = Fusarium_inhibition_rate, color = treatment)) +
-  facet_wrap(~soil, nrow = 1) +
-  geom_boxplot() +
+  facet_wrap(~soil_type, , strip.position = "bottom", nrow = 1) +
+  geom_boxplot(outliers = F) +
   scale_color_manual(values = palette_treatments) +
   theme_prism() +
+  scale_y_continuous(limits = c(60,90)) +
   coord_cartesian(clip = "off") + # Allows text to go outside the standard plot area
-  theme(axis.text.x = element_blank()) + 
-  labs(x = "", y = "Rhizosphere inhibitory effect (%)") + ggtitle("F. oxysporum growth inhibition by soil samples") + 
+  theme(strip.placement = "outside",
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        panel.spacing = unit(0, "lines")) + 
+  labs(x = "", y = "Pathogen inhibition rate (%)") + ggtitle("F. oxysporum growth inhibition by soil samples") + 
   geom_signif(
-  data = significant,
-  aes(xmin = treatment1, xmax = treatment2, annotations = round(p.value, 3),
-  y_position = y_position), # Position the annotations
-  manual = TRUE,
-  inherit.aes = FALSE
-)
+    data = significant,
+    aes(xmin = treatment1, xmax = treatment2, annotations = p.signif,
+        y_position = y_position), # Position the annotations
+    manual = TRUE,
+    inherit.aes = FALSE
+  )
 ```
 
     ## Warning in geom_signif(data = significant, aes(xmin = treatment1, xmax =
     ## treatment2, : Ignoring unknown aesthetics: xmin, xmax, annotations, and
     ## y_position
 
-![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
+``` r
+plot_growth_inhb
+```
+
+![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
+
+``` r
+# for simpler code, but using default ANOVA + Wilcoxon, stat_compare_means(label = "p.signif") can be used instead of geom_signif()
+```
+
+  

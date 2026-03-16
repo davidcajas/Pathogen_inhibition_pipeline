@@ -107,6 +107,7 @@ Note that this script imports the metadata from "experiment_metadata.xlsx" assum
 
 ```{r}
 library(readxl)
+library(forcats)
 
 # Define source of experiment metadata
 
@@ -126,6 +127,9 @@ for (i in excel_sheets(sourcemeta)) {
 # Add order to treatments
 treatment_data$label <- factor(as.factor(treatment_data$label), levels = c("Control", "Disease suppression", "AMF", "Nitrogen fixation", "Phosphate solubilisation"))
 treatment_data$applied_product <- factor(as.factor(treatment_data$applied_product), levels = c("No product", "Compete Plus", "MycorGran 2.0", "Vixeran", "NuelloPhos"))
+
+soil_data$label <- fct_inorder(soil_data$label) # This function (from forcats pkg) is equivalent to factor but applies the order of appearance to the levels instead of alphabetical.
+soil_data$origin_location <- fct_inorder(soil_data$origin_location)
 
 # Small processing of soil data
 
@@ -184,6 +188,20 @@ results <- left_join(results,meta,by = "Sample")
 results
 ```
 
+#### 0.3.5) Add 2-lines metadata entries
+
+```{r}
+library(plotly)
+
+results <- mutate(results, soil_type = ifelse(is.na(origin_location) | is.na(soil), NA, paste0(origin_location, " \n", soil))) # Add a column that has both the soil type and origin information in one new column
+
+results$soil_type <- factor(results$soil_type, levels = levels(fct_inorder(arrange(results,soil)$soil_type))) # Format new column as a factor, using the order of "soil" column levels.
+
+results <- mutate(results, treatment_full = ifelse(is.na(applied_product) | is.na(treatment), NA, paste0(applied_product, " \n", treatment))) # Add a column that has both the treatment commercial name and target effect information in one new column
+
+results$treatment_full <- factor(results$treatment_full, levels = levels(fct_inorder(arrange(results,treatment)$treatment_full))) # Format new column as a factor, using the order of "treatment" column levels.
+```
+
 ## 1) Data processing
 
 Some calculations will be done to further process the data:
@@ -226,6 +244,9 @@ names(palette_treatments) <- levels(treatment_data$label)
 
 palette_products <- palette_5col
 names(palette_products) <- levels(treatment_data$applied_product)
+
+palette_treatments_full <- palette_5col
+names(palette_products) <- levels(results$treatment_full)
 ```
 
 Plot both the raw measurements along with the inhibition rate indicator
@@ -336,8 +357,30 @@ library(dplyr)
 paircomp <- emmeans(model_random_a, pairwise ~ treatment|soil, adjust = "tukey")
 # (paircomp <- emmeans(model_random_a, pairwise ~ treatment|soil_texture_main, adjust = "tukey"))
 
+# Extract only the significant values
 significant <- as.data.frame(paircomp$contrasts)[as.data.frame(paircomp$contrasts)$p.value < 0.1, ]
 significant <- separate(significant, contrast, into = c("treatment1", "treatment2"), sep = " - ")
+
+# Add asterisk-based symbols
+significant <- mutate(significant, p.signif = case_when(
+    p.value <= 0.001 ~ "***",
+    p.value <= 0.01  ~ "**",
+    p.value <= 0.05  ~ "*",
+    TRUE             ~ "ns"
+  ))
+
+# Add a y_position value for ggplot to use it as a reference
+significant <- significant %>%
+  group_by(soil) %>%
+  mutate(y_position = as.data.frame(paircomp)$upper.CL[1:nrow(significant)] * 1 + 
+                        (row_number() - 1) * max(as.data.frame(paircomp)$upper.CL) * 0.1) %>%
+  ungroup() 
+
+# Add a soil_type column so it can be used as a variable as well for plotting
+significant <- left_join(significant, results %>%
+  select(soil, soil_type) %>%
+  distinct() %>%
+  drop_na(), by = "soil")
 
 significant
 
@@ -347,28 +390,32 @@ According to the multiple comparisons analysis, the only soil where the treatmen
 
 ### 3.3) Add statistics to the original plot
 
-```{r}
-
-significant <- significant %>%
-  group_by(soil) %>%
-  mutate(y_position = max(as.data.frame(paircomp)$upper.CL) * 1.05 + 
-                        (row_number() - 1) * max(as.data.frame(paircomp)$upper.CL) * 0.1) %>%
-  ungroup()
-
-ggplot(drop_na(results,"Fusarium_inhibition_rate")
+```{r, fig.width=9, fig.height=6}
+# print in 6 x 9 in
+plot_growth_inhb <- ggplot(drop_na(results,"Fusarium_inhibition_rate")
        , aes(x = treatment, y = Fusarium_inhibition_rate, color = treatment)) +
-  facet_wrap(~soil, nrow = 1) +
-  geom_boxplot() +
+  facet_wrap(~soil_type, , strip.position = "bottom", nrow = 1) +
+  geom_boxplot(outliers = F) +
   scale_color_manual(values = palette_treatments) +
   theme_prism() +
+  scale_y_continuous(limits = c(60,90)) +
   coord_cartesian(clip = "off") + # Allows text to go outside the standard plot area
-  theme(axis.text.x = element_blank()) + 
-  labs(x = "", y = "Rhizosphere inhibitory effect (%)") + ggtitle("F. oxysporum growth inhibition by soil samples") + 
+  theme(strip.placement = "outside",
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        panel.spacing = unit(0, "lines")) + 
+  labs(x = "", y = "Pathogen inhibition rate (%)") + ggtitle("F. oxysporum growth inhibition by soil samples") + 
   geom_signif(
-  data = significant,
-  aes(xmin = treatment1, xmax = treatment2, annotations = round(p.value, 3),
-  y_position = y_position), # Position the annotations
-  manual = TRUE,
-  inherit.aes = FALSE
-)
+    data = significant,
+    aes(xmin = treatment1, xmax = treatment2, annotations = p.signif,
+        y_position = y_position), # Position the annotations
+    manual = TRUE,
+    inherit.aes = FALSE
+  )
+
+plot_growth_inhb
+# for simpler code, but using default ANOVA + Wilcoxon, stat_compare_means(label = "p.signif") can be used instead of geom_signif()
+
 ```
+
+\
