@@ -735,7 +735,7 @@ plot_growth_inhb <- ggplot(drop_na(results,"Fusarium_inhibition_rate")
 plot_growth_inhb
 ```
 
-![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
+![](pathogen_growth_inhibition_files/figure-gfm/unnamed-chunk-17-1.pdf)<!-- -->
 
 ``` r
 # for simpler code, but using default ANOVA + Wilcoxon, stat_compare_means(label = "p.signif") can be used instead of geom_signif()

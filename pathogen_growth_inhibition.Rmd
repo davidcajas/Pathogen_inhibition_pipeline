@@ -390,7 +390,7 @@ According to the multiple comparisons analysis, the only soil where the treatmen
 
 ### 3.3) Add statistics to the original plot
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, dev='pdf'}
 # print in 6 x 9 in
 plot_growth_inhb <- ggplot(drop_na(results,"Fusarium_inhibition_rate")
        , aes(x = treatment, y = Fusarium_inhibition_rate, color = treatment)) +
